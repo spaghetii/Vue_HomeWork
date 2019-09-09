@@ -1,0 +1,247 @@
+Lab: 以 Node.js 建構 Web API
+
+
+1.  執行下列 SQL Script 以建立本次練習所需的資料庫。
+
+
+create database labDB default character set utf8;
+use labDB;
+create table news
+(
+  newsId int auto_increment not null primary key,
+  ymd char(10),
+  title varchar(50)
+); 
+insert into news (ymd, title) values 
+  ('2017-05-01', 'News A'),
+  ('2017-05-02', 'News B'),
+  ('2017-05-03', 'News C'),
+  ('2017-05-04', 'News D'),
+  ('2017-05-05', 'News E');
+select * from news;
+
+2.  滑鼠右鍵 Lab_WebAPI 資料夾 | Open in Terminal，
+	輸入下列指令以安裝/更新本程式所需的模組:
+
+npm install express
+npm install cors
+npm install body-parser
+npm install express-session
+npm install ejs
+npm install mysql
+exit
+
+3.  啟動 Web Server 程式
+
+
+3.1 點兩下 app.js 開啟檔案，檢視其中的程式與註解
+	<Note>必要時，改寫連線資料庫的帳號與密碼 
+
+var connection = mysql.createConnection({
+  host : '127.0.0.1', //本機端
+  user : 'root',      //帳號
+  password : '',      //密碼
+  database : 'labDB'  //資料庫名稱
+});
+
+app.listen(80);       //埠號 80
+
+NOTE: app.js中的HTTP 的 Method (POST/GET/PUT/DELETE) 先閱讀過，之後程式碼才知道如何增查刪修
+
+
+3.2 滑鼠右鍵 Lab_WebAPI 資料夾 | Open in Terminal，
+	輸入 node app.js 以執行程式。(如果剛才沒有修改埠號，就要檢查埠號80是否有程式占用)
+
+
+3.3 在瀏覽器連接 http://localhost
+	試用本系統各項增查修刪功能
+
+3.4 利用Vue實現這些功能
+
+3.4.1 確定自己是否已導入Vue
+<script src="https://cdn.jsdelivr.net/npm/vue/dist/vue.js"></script>
+
+3.4.2.1 js部分
+在script中新增一個Vue出來(el:是你div的id，這裡要注意到不要把id放在你要放函式的那一行,data存放資料，
+可用{{key}}顯示其值({{}} 請放在html的範圍，切勿亂放!!!),
+methods放方法進去，裡面有三個方法，分別是新增、修改、刪除，
+新增按鈕按下後會顯示對話盒去新增內容;
+修改按鈕按下後一樣會顯示對話盒去修改內容(對話盒出現時會顯示目前的內容);
+刪除按鈕按下去救回不去囉~~)
+
+var LabApp = new Vue({
+    el: '#app1',
+    data:{
+        newDate: new Date().toLocaleTimeString('en-US', { hour12: false }),
+        newsList:
+        [
+            { ymd: "2017-05-01", title: "Item 1" },
+            { ymd: "2017-05-01", title: "Item 2" },
+            { ymd: "2017-05-02", title: "Item 3" },
+            { ymd: "2017-05-03", title: "Item 4" },
+            { ymd: "2017-05-04", title: "Item 5" }
+        ]
+    },
+    methods:{
+        insertButtonClick:function(){
+            $("#newsModal").modal( { backdrop: "static" } );
+            currentIndex = -1;
+        },
+        editButtonClick: function(e){
+            $("#newsModal").modal( { backdrop: "static" } );
+            newsModalApp.title =this.newsList[e].title ;
+            newsModalApp.ymd =this.newsList[e].ymd ;
+            currentIndex = e;
+        },
+        deleteButtonClick: function(e){
+            // showToast("Select item",currentIndex);
+            $.ajax({
+                type: "delete",
+                url: "/home/news",
+                data: this.newsList[e]
+            })
+            .then(function (e) {
+                showToast("Report",e);
+            })
+            showNewsUI();               //更新目前畫面
+        }
+    }
+});
+
+3.4.2.2 js部分2
+對話盒部分，裡面的方法只有一個，確認後先判斷是新增還是修改(currentIndex=-1的話就是新增，不是-1就是修改)
+修改的部分就去把目前對話盒的內容交給LabApp的newList再透過ajax去修改(傳送的所需資料請查詢app.js)
+新增的部分就把內容post給sever
+
+var newsModalApp = new Vue({
+    el:"#newsModal",
+    data:{
+        title: "",
+        ymd: ""
+    },
+    methods:{
+        modalOK: function(){
+            // showToast("Select item",currentIndex);
+            if (currentIndex >= 0){
+                LabApp.newsList[currentIndex].title = newsModalApp.title;
+                LabApp.newsList[currentIndex].ymd   = newsModalApp.ymd;
+                $.ajax({
+                    type: "put",
+                    url: "/home/news",
+                    data: LabApp.newsList[currentIndex]
+                })
+                .then(function (e) {
+                    showToast("Except Report",e);
+                })
+                $("#newsModal").modal("hide");  //隱藏對話盒
+            }else{
+                var dataToSever = {
+                    title: this.title,
+                    ymd: this.ymd
+                }
+                $.ajax({
+                    type: "post",
+                    url: "/home/news",
+                    data: dataToSever
+                })
+                .then(function (e) {
+                    showToast("Report",e);
+                })
+                showNewsUI();                   //更新目前畫面
+                $("#newsModal").modal("hide");  //隱藏對話盒
+            }
+            
+        }
+    }
+})
+
+3.4.2.3 js部分3
+顯示目前資料庫內容，每秒更新
+
+function showNewsUI(){                  //顯示資料庫目前內容
+    $.get("/home/news", function (e) {
+    LabApp.newsList = JSON.parse(e);
+    })
+    LabApp.newDate = new Date().toLocaleTimeString('en-US', { hour12: false });
+}
+
+showNewsUI();
+setInterval(showNewsUI,1000);
+
+
+3.4.3 html部分
+表單，利用v-for去顯示多筆資料，其中的item是newsList裡的其中一項,index式執行的第幾項(從0開始)
+v-on:click是點擊之後觸發的方法，之所以要帶入index是為了讓其他地方可以了解到目前在處理哪一項
+
+<li v-for="item,index in newsList"  class="list-group-item">
+    {{item.title}} [{{item.ymd}}]
+    <span class="pull-right">
+
+        <button v-on:click="editButtonClick(index)" class="btn btn-info btn-xs editItem">
+            <span class="glyphicon glyphicon-pencil" aria-hidden="true"></span>
+        </button>&nbsp;
+
+        <button v-on:click="deleteButtonClick(index)" class="btn btn-danger btn-xs deleteItem"
+        ><span class="glyphicon glyphicon-remove" aria-hidden="true"></span>
+        </button>
+
+    </span>
+</li>
+
+<div id="newsModal" class="modal fade" role="dialog">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <button type="button" class="close" data-dismiss="modal">&times;</button>
+                <h4>新增/修改</h4>
+            </div>
+            <div class="modal-body">
+                <form>
+                    <div class="form-group">
+                        <label for="titleTextBox">
+                            <span class="glyphicon glyphicon-bullhorn"></span>
+                            標題
+                        </label>
+                        <input type="text"
+                               id="titleTextBox" v-model="title"
+                               class="form-control"
+                               placeholder="請輸入標題" />
+                    </div>
+
+                    <div class="form-group">
+                        <label for="ymdTextBox">
+                            <span class="glyphicon glyphicon-time"></span>
+                            日期
+                        </label>
+                        <input type="text"
+                               id="ymdTextBox" v-model="ymd"
+                               class="form-control"
+                               placeholder="yyyy-mm-dd 例如: 2017-05-20">
+                    </div>
+
+
+                </form>
+            </div>
+            <div class="modal-footer">
+                    <div class="pull-right">
+                        <button type="button"
+                                id="okButton" v-on:click="modalOK"
+                                class="btn btn-success">
+                            <span class="glyphicon glyphicon-ok"></span> 確定
+                        </button>
+                        <button type="button"
+                                id="cancelButton"
+                                class="btn btn-default"
+                                data-dismiss="modal">
+                            <span class="glyphicon glyphicon-remove"></span> 取消
+                        </button>
+                    </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+
+
+
